@@ -35,7 +35,8 @@ input.bad,select.bad{border-color:var(--err)}
 <div id="app"></div>
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyHWnJ4QBpY3zbP8ve__DtsUyRZpb88BsCHorEQiCSDWSK_1a1jX0XnmbYA6gOOfYV9/exec";
-const PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS","Factory","أجازة"];
+const PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS","Factory"];
+const SUPS = new Set([713,759,763]);
 const DEPTS = {
  "النجارة":{sup:"عبد الظاهر محمد",workers:[[754,"محمود علي السيد"],[816,"وجيه إسماعيل"],[8025,"محمد فايز"]]},
  "الماكينات":{sup:"عبد الظاهر محمد",workers:[[713,"عبد الظاهر محمد (مشرف)"],[736,"بدير حسني"],[742,"أحمد متولي"]]},
@@ -65,9 +66,15 @@ function render(){
    <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup}</div></div>
      <button class="sec" onclick="changeDept()">تغيير</button></div>
      <label>التاريخ</label><input type="date" id="date" value="${today()}"></div>
-   ${DEPTS[dept].workers.map(w=>`<div class="card"><h2>${w[1]}</h2><label>مكان العمل</label><select data-loc="${w[0]}"><option ${locs[w[0]]=="المصنع"?"selected":""}>المصنع</option><option ${locs[w[0]]=="المشروع"?"selected":""}>المشروع</option></select>${rows[w[0]].map((r,i)=>rowHtml(w[0],i,r)).join("")}
-     <p style="margin:10px 0 0"><button class="sec" onclick="addRow(${w[0]})">+ إضافة بند/مشروع آخر</button></p></div>`).join("")}
+   ${DEPTS[dept].workers.map(cardHtml).join("")}
    <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} في الانتظار`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>`;
+}
+function cardHtml(w){
+  const c=w[0], sup=SUPS.has(c), L=locs[c], opt=o=>`<option ${L==o?"selected":""}>${o}</option>`;
+  let body="";
+  if(L==="أجازة") body=`<div class="badge" style="margin-top:10px">أجازة: لا حاجة لإدخال أي بيانات.</div>`;
+  else body=rows[c].map((r,i)=>rowHtml(c,i,r)).join("")+`<p style="margin:10px 0 0"><button class="sec" onclick="addRow(${c})">+ إضافة بند/مشروع آخر</button></p>`;
+  return `<div class="card"><h2>${w[1]}</h2><label>مكان العمل</label><select data-loc="${c}">${["المصنع","المشروع","أجازة"].map(opt).join("")}</select>${body}</div>`;
 }
 function rowHtml(c,i,r){
   const k=`data-c="${c}" data-i="${i}"`;
@@ -80,21 +87,30 @@ function rowHtml(c,i,r){
    <div class="chk"><input type="checkbox" id="ev${c}_${i}" ${k} data-f="ev" ${r.ev?"checked":""}><label for="ev${c}_${i}">اشتغل سهرة</label></div>
    ${r.ev?`<label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}">`:""}</div>`;
 }
-document.addEventListener("input",e=>{const t=e.target;if(t.dataset&&t.dataset.f==="ev"){rows[t.dataset.c][t.dataset.i].ev=t.checked;render();return;}if(t.dataset&&t.dataset.loc){locs[t.dataset.loc]=t.value;return;}if(t.dataset&&t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad")}});
+document.addEventListener("input",e=>{const t=e.target;if(t.dataset&&t.dataset.f==="ev"){rows[t.dataset.c][t.dataset.i].ev=t.checked;render();return;}if(t.dataset&&t.dataset.loc){locs[t.dataset.loc]=t.value;render();return;}if(t.dataset&&t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad")}});
 function setDept(){const v=$("#pick").value;if(!v)return;dept=v;ls.set("dept",v);resetRows();render();}
 function changeDept(){if(confirm("تغيير القسم؟")){dept=null;localStorage.removeItem("dept");render();}}
 function addRow(c){rows[c].push(blank());render();}
 function delRow(c,i){rows[c].splice(i,1);render();}
 
 function submitAll(){
-  const date=$("#date").value; let bad=0; const recs=[];
-  DEPTS[dept].workers.forEach(w=>rows[w[0]].forEach((r,i)=>{
-    const any=r.project||r.item||r.desc||r.h1||r.h2; if(!any)return;
-    const leave=r.project==="أجازة";const ok=r.project&&(leave||(r.item.trim()&&(r.ev?r.h2!=="":r.h1!=="")));
-    if(!ok){bad++;const el=$(`#r${w[0]}_${i}`);el&&el.querySelectorAll("select,input").forEach(x=>{if(["project","item"].includes(x.dataset.f)&&!x.value)x.classList.add("bad");if(!leave&&((x.dataset.f==="h1"&&!r.ev&&r.h1==="")||(x.dataset.f==="h2"&&r.ev&&r.h2==="")))x.classList.add("bad")});return;}
-    recs.push({date,dept,supervisor:DEPTS[dept].sup,code:w[0],worker:w[1],loc:locs[w[0]],project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:r.ev?Number(r.h2||0):0});
-  }));
-  if(bad){notice={e:1,t:"في صفوف ناقصة (المشروع والبند والساعات مطلوبين). راجع الخانات الحمراء."};render();window.scrollTo(0,0);return;}
+  const date=$("#date").value; let bad=0; const recs=[], marks=[];
+  DEPTS[dept].workers.forEach(w=>{
+    const c=w[0], sup=SUPS.has(c), base={date,dept,supervisor:DEPTS[dept].sup,code:c,worker:w[1],loc:locs[c]};
+    if(locs[c]==="أجازة"){recs.push({...base,project:"",item:"",desc:"",h1:0,h2:0});return;}
+    rows[c].forEach((r,i)=>{
+      const any=r.project||r.item||r.desc||r.h1||r.h2; if(!any)return;
+      const ok=sup?!!r.project:(r.project&&r.item.trim()&&(r.ev?r.h2!=="":r.h1!==""));
+      if(!ok){bad++;
+        if(!r.project)marks.push([c,i,"project"]);
+        if(!sup&&!r.item.trim())marks.push([c,i,"item"]);
+        if(!sup&&!r.ev&&r.h1==="")marks.push([c,i,"h1"]);
+        if(!sup&&r.ev&&r.h2==="")marks.push([c,i,"h2"]);
+        return;}
+      recs.push({...base,project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:r.ev?Number(r.h2||0):0});
+    });
+  });
+  if(bad){notice={e:1,t:"في صفوف ناقصة. راجع الخانات الحمراء."};render();marks.forEach(m=>{const el=document.querySelector(`[data-c="${m[0]}"][data-i="${m[1]}"][data-f="${m[2]}"]`);el&&el.classList.add("bad")});window.scrollTo(0,0);return;}
   if(!recs.length){notice={e:1,t:"مفيش بيانات للإرسال."};render();window.scrollTo(0,0);return;}
   const q=ls.get("queue",[]);q.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,8),records:recs});ls.set("queue",q);
   resetRows();notice={t:"تم الحفظ، جاري الإرسال..."};render();window.scrollTo(0,0);flush();
