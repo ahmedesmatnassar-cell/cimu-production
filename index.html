@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f6f5c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<title>يومية الإنتاج</title>
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--tx:#1b2421;--mut:#6b7772;--pri:#1f6f5c;--bd:#d5dcd9;--err:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#141a18;--card:#1e2623;--tx:#e8eeeb;--mut:#9aa7a1;--pri:#3aa88c;--bd:#33403b}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:var(--bg);color:var(--tx);padding:12px;padding-bottom:90px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 2px}
+input,select,textarea{width:100%;padding:10px;font-size:16px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font-family:inherit}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row{border-top:1px dashed var(--bd);margin-top:10px;padding-top:6px}
+button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+.pri{background:var(--pri);color:#fff}.sec{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+.del{background:transparent;color:var(--err);padding:4px 8px;font-size:13px}
+.bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bd);padding:10px 12px;display:flex;gap:8px;align-items:center}
+.bar .pri{flex:1;font-size:17px;padding:13px}
+.badge{font-size:12px;color:var(--mut)}
+.msg{padding:10px;border-radius:8px;margin-bottom:10px;font-size:14px;background:#e3f3ec;color:#14523f}
+.msg.e{background:#fbe5e2;color:#8a2218}
+.top{display:flex;justify-content:space-between;align-items:center}
+input.bad,select.bad{border-color:var(--err)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const SCRIPT_URL = "ضع_رابط_Apps_Script_هنا";
+const PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS"];
+const DEPTS = {
+ "النجارة":{sup:"عبد الظاهر محمد",workers:[[754,"محمود علي السيد"],[816,"وجيه إسماعيل"],[887,"محمد عبد الرحمن"],[8025,"محمد فايز"]]},
+ "الماكينات":{sup:"عبد الظاهر محمد",workers:[[736,"بدير حسني"],[742,"أحمد متولي"]]},
+ "الدهانات":{sup:"عماد جمعة",workers:[[722,"محمود محمد"],[8012,"ناصر عويس"],[8018,"مدبولي محمد"]]},
+ "التركيبات":{sup:"محمد بيومي",workers:[[817,"طارق سيد"],[818,"سلامه سلامه"],[8022,"اسلام احمد"],[8024,"عبد الله محمد"]]}
+};
+const $ = s => document.querySelector(s);
+const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const today = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let dept = ls.get("dept",null), rows = {}, notice = null;
+
+function resetRows(){ rows={}; if(dept) DEPTS[dept].workers.forEach(w=>rows[w[0]]=[blank()]); }
+function blank(){ return {project:"",item:"",desc:"",h1:"",h2:""}; }
+
+function render(){
+  const app = $("#app");
+  if(!dept){
+    app.innerHTML = `<div class="card"><h1>يومية الإنتاج</h1><label>اختر قسمك (مرة واحدة)</label>
+      <select id="pick"><option value="">— اختر —</option>${Object.keys(DEPTS).map(d=>`<option>${d}</option>`).join("")}</select>
+      <p><button class="pri" onclick="setDept()">متابعة</button></p></div>`;
+    return;
+  }
+  const q = ls.get("queue",[]);
+  app.innerHTML = `
+   ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
+   <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup}</div></div>
+     <button class="sec" onclick="changeDept()">تغيير</button></div>
+     <div class="g2"><div><label>التاريخ</label><input type="date" id="date" value="${today()}"></div>
+     <div><label>مكان العمل</label><select id="loc"><option>المصنع</option><option>المشروع</option></select></div></div></div>
+   ${DEPTS[dept].workers.map(w=>`<div class="card"><h2>${w[1]}</h2>${rows[w[0]].map((r,i)=>rowHtml(w[0],i,r)).join("")}
+     <p style="margin:10px 0 0"><button class="sec" onclick="addRow(${w[0]})">+ إضافة بند/مشروع آخر</button></p></div>`).join("")}
+   <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} في الانتظار`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>`;
+}
+function rowHtml(c,i,r){
+  const k=`data-c="${c}" data-i="${i}"`;
+  return `<div class="row" id="r${c}_${i}">
+   ${i>0?`<div style="text-align:left"><button class="del" onclick="delRow(${c},${i})">حذف الصف</button></div>`:""}
+   <label>المشروع</label><select ${k} data-f="project"><option value="">— اختر —</option>${PROJECTS.map(p=>`<option ${r.project==p?"selected":""}>${p}</option>`).join("")}</select>
+   <label>البند</label><input ${k} data-f="item" value="${esc(r.item)}">
+   <label>وصف العمل</label><input ${k} data-f="desc" value="${esc(r.desc)}">
+   <div class="g2"><div><label>ساعات الوردية</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h1)}"></div>
+   <div><label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}"></div></div></div>`;
+}
+document.addEventListener("input",e=>{const t=e.target;if(t.dataset&&t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad")}});
+function setDept(){const v=$("#pick").value;if(!v)return;dept=v;ls.set("dept",v);resetRows();render();}
+function changeDept(){if(confirm("تغيير القسم؟")){dept=null;localStorage.removeItem("dept");render();}}
+function addRow(c){rows[c].push(blank());render();}
+function delRow(c,i){rows[c].splice(i,1);render();}
+
+function submitAll(){
+  const date=$("#date").value, loc=$("#loc").value; let bad=0; const recs=[];
+  DEPTS[dept].workers.forEach(w=>rows[w[0]].forEach((r,i)=>{
+    const any=r.project||r.item||r.desc||r.h1||r.h2; if(!any)return;
+    const ok=r.project&&r.item.trim()&&(r.h1!==""||r.h2!=="");
+    if(!ok){bad++;const el=$(`#r${w[0]}_${i}`);el&&el.querySelectorAll("select,input").forEach(x=>{if(["project","item"].includes(x.dataset.f)&&!x.value)x.classList.add("bad");if(["h1","h2"].includes(x.dataset.f)&&r.h1===""&&r.h2==="")x.classList.add("bad")});return;}
+    recs.push({date,dept,supervisor:DEPTS[dept].sup,code:w[0],worker:w[1],loc,project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:Number(r.h2||0)});
+  }));
+  if(bad){notice={e:1,t:"في صفوف ناقصة (المشروع والبند والساعات مطلوبين). راجع الخانات الحمراء."};render();window.scrollTo(0,0);return;}
+  if(!recs.length){notice={e:1,t:"مفيش بيانات للإرسال."};render();window.scrollTo(0,0);return;}
+  const q=ls.get("queue",[]);q.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,8),records:recs});ls.set("queue",q);
+  resetRows();notice={t:"تم الحفظ، جاري الإرسال..."};render();window.scrollTo(0,0);flush();
+}
+let flushing=false;
+async function flush(){
+  if(flushing)return;flushing=true;let sent=0;
+  try{
+    let q=ls.get("queue",[]);
+    while(q.length&&navigator.onLine){
+      try{await fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(q[0])});}catch(e){break;}
+      q.shift();sent++;ls.set("queue",q);
+    }
+  }finally{flushing=false;}
+  const left=ls.get("queue",[]).length;
+  if(sent&&!left)notice={t:"✅ تم الإرسال بنجاح"};
+  else if(left)notice={e:1,t:"لا يوجد اتصال الآن. البيانات محفوظة وسيتم إرسالها تلقائياً."};
+  render();
+}
+window.addEventListener("online",flush);
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+resetRows();render();if(ls.get("queue",[]).length)flush();
+</script>
+</body>
+</html>
