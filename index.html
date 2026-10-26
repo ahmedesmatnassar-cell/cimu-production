@@ -20,6 +20,7 @@ input,select,textarea{width:100%;padding:10px;font-size:16px;border:1px solid va
 .row{border-top:1px dashed var(--bd);margin-top:10px;padding-top:6px}
 button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
 .pri{background:var(--pri);color:#fff}.sec{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+.chk{display:flex;align-items:center;gap:8px;margin-top:10px}.chk input{width:auto}.chk label{margin:0;font-size:15px;color:var(--tx)}
 .del{background:transparent;color:var(--err);padding:4px 8px;font-size:13px}
 .bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bd);padding:10px 12px;display:flex;gap:8px;align-items:center}
 .bar .pri{flex:1;font-size:17px;padding:13px}
@@ -34,21 +35,21 @@ input.bad,select.bad{border-color:var(--err)}
 <div id="app"></div>
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyHWnJ4QBpY3zbP8ve__DtsUyRZpb88BsCHorEQiCSDWSK_1a1jX0XnmbYA6gOOfYV9/exec";
-const PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS"];
+const PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS","Factory","أجازة"];
 const DEPTS = {
- "النجارة":{sup:"عبد الظاهر محمد",workers:[[754,"محمود علي السيد"],[816,"وجيه إسماعيل"],[887,"محمد عبد الرحمن"],[8025,"محمد فايز"]]},
- "الماكينات":{sup:"عبد الظاهر محمد",workers:[[736,"بدير حسني"],[742,"أحمد متولي"]]},
- "الدهانات":{sup:"عماد جمعة",workers:[[722,"محمود محمد"],[8012,"ناصر عويس"],[8018,"مدبولي محمد"]]},
- "التركيبات":{sup:"محمد بيومي",workers:[[817,"طارق سيد"],[818,"سلامه سلامه"],[8022,"اسلام احمد"],[8024,"عبد الله محمد"]]}
+ "النجارة":{sup:"عبد الظاهر محمد",workers:[[754,"محمود علي السيد"],[816,"وجيه إسماعيل"],[8025,"محمد فايز"]]},
+ "الماكينات":{sup:"عبد الظاهر محمد",workers:[[713,"عبد الظاهر محمد (مشرف)"],[736,"بدير حسني"],[742,"أحمد متولي"]]},
+ "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة (مشرف)"],[722,"محمود محمد"],[8012,"ناصر عويس"],[8018,"مدبولي محمد"]]},
+ "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي (مشرف)"],[817,"طارق سيد"],[818,"سلامه سلامه"],[887,"محمد عبد الرحمن"],[8022,"اسلام احمد"],[8024,"عبد الله محمد"],[8027,"ايمن عابدين"]]}
 };
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const today = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let dept = ls.get("dept",null), rows = {}, notice = null;
+let dept = ls.get("dept",null), rows = {}, locs = {}, notice = null;
 
-function resetRows(){ rows={}; if(dept) DEPTS[dept].workers.forEach(w=>rows[w[0]]=[blank()]); }
-function blank(){ return {project:"",item:"",desc:"",h1:"",h2:""}; }
+function resetRows(){ rows={}; locs={}; if(dept) DEPTS[dept].workers.forEach(w=>{rows[w[0]]=[blank()];locs[w[0]]="المصنع";}); }
+function blank(){ return {project:"",item:"",desc:"",h1:"",h2:"",ev:false}; }
 
 function render(){
   const app = $("#app");
@@ -63,9 +64,8 @@ function render(){
    ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
    <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup}</div></div>
      <button class="sec" onclick="changeDept()">تغيير</button></div>
-     <div class="g2"><div><label>التاريخ</label><input type="date" id="date" value="${today()}"></div>
-     <div><label>مكان العمل</label><select id="loc"><option>المصنع</option><option>المشروع</option></select></div></div></div>
-   ${DEPTS[dept].workers.map(w=>`<div class="card"><h2>${w[1]}</h2>${rows[w[0]].map((r,i)=>rowHtml(w[0],i,r)).join("")}
+     <label>التاريخ</label><input type="date" id="date" value="${today()}"></div>
+   ${DEPTS[dept].workers.map(w=>`<div class="card"><h2>${w[1]}</h2><label>مكان العمل</label><select data-loc="${w[0]}"><option ${locs[w[0]]=="المصنع"?"selected":""}>المصنع</option><option ${locs[w[0]]=="المشروع"?"selected":""}>المشروع</option></select>${rows[w[0]].map((r,i)=>rowHtml(w[0],i,r)).join("")}
      <p style="margin:10px 0 0"><button class="sec" onclick="addRow(${w[0]})">+ إضافة بند/مشروع آخر</button></p></div>`).join("")}
    <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} في الانتظار`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>`;
 }
@@ -76,22 +76,23 @@ function rowHtml(c,i,r){
    <label>المشروع</label><select ${k} data-f="project"><option value="">— اختر —</option>${PROJECTS.map(p=>`<option ${r.project==p?"selected":""}>${p}</option>`).join("")}</select>
    <label>البند</label><input ${k} data-f="item" value="${esc(r.item)}">
    <label>وصف العمل</label><input ${k} data-f="desc" value="${esc(r.desc)}">
-   <div class="g2"><div><label>ساعات الوردية</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h1)}"></div>
-   <div><label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}"></div></div></div>`;
+   <label>ساعات العمل</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h1)}">
+   <div class="chk"><input type="checkbox" id="ev${c}_${i}" ${k} data-f="ev" ${r.ev?"checked":""}><label for="ev${c}_${i}">اشتغل سهرة</label></div>
+   ${r.ev?`<label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}">`:""}</div>`;
 }
-document.addEventListener("input",e=>{const t=e.target;if(t.dataset&&t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad")}});
+document.addEventListener("input",e=>{const t=e.target;if(t.dataset&&t.dataset.f==="ev"){rows[t.dataset.c][t.dataset.i].ev=t.checked;render();return;}if(t.dataset&&t.dataset.loc){locs[t.dataset.loc]=t.value;return;}if(t.dataset&&t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad")}});
 function setDept(){const v=$("#pick").value;if(!v)return;dept=v;ls.set("dept",v);resetRows();render();}
 function changeDept(){if(confirm("تغيير القسم؟")){dept=null;localStorage.removeItem("dept");render();}}
 function addRow(c){rows[c].push(blank());render();}
 function delRow(c,i){rows[c].splice(i,1);render();}
 
 function submitAll(){
-  const date=$("#date").value, loc=$("#loc").value; let bad=0; const recs=[];
+  const date=$("#date").value; let bad=0; const recs=[];
   DEPTS[dept].workers.forEach(w=>rows[w[0]].forEach((r,i)=>{
     const any=r.project||r.item||r.desc||r.h1||r.h2; if(!any)return;
-    const ok=r.project&&r.item.trim()&&(r.h1!==""||r.h2!=="");
-    if(!ok){bad++;const el=$(`#r${w[0]}_${i}`);el&&el.querySelectorAll("select,input").forEach(x=>{if(["project","item"].includes(x.dataset.f)&&!x.value)x.classList.add("bad");if(["h1","h2"].includes(x.dataset.f)&&r.h1===""&&r.h2==="")x.classList.add("bad")});return;}
-    recs.push({date,dept,supervisor:DEPTS[dept].sup,code:w[0],worker:w[1],loc,project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:Number(r.h2||0)});
+    const leave=r.project==="أجازة";const ok=r.project&&(leave||(r.item.trim()&&(r.ev?r.h2!=="":r.h1!=="")));
+    if(!ok){bad++;const el=$(`#r${w[0]}_${i}`);el&&el.querySelectorAll("select,input").forEach(x=>{if(["project","item"].includes(x.dataset.f)&&!x.value)x.classList.add("bad");if(!leave&&((x.dataset.f==="h1"&&!r.ev&&r.h1==="")||(x.dataset.f==="h2"&&r.ev&&r.h2==="")))x.classList.add("bad")});return;}
+    recs.push({date,dept,supervisor:DEPTS[dept].sup,code:w[0],worker:w[1],loc:locs[w[0]],project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:r.ev?Number(r.h2||0):0});
   }));
   if(bad){notice={e:1,t:"في صفوف ناقصة (المشروع والبند والساعات مطلوبين). راجع الخانات الحمراء."};render();window.scrollTo(0,0);return;}
   if(!recs.length){notice={e:1,t:"مفيش بيانات للإرسال."};render();window.scrollTo(0,0);return;}
