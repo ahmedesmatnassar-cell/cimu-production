@@ -21,6 +21,7 @@ input,select,textarea{width:100%;padding:10px;font-size:16px;border:1px solid va
 button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
 .pri{background:var(--pri);color:#fff}.sec{background:transparent;color:var(--pri);border:1px solid var(--pri)}
 .chk{display:flex;align-items:center;gap:8px;margin-top:10px}.chk input{width:auto}.chk label{margin:0;font-size:15px;color:var(--tx)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;z-index:9}.box{background:var(--card);width:100%;max-height:85vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}.srow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}.warn{color:var(--err);font-size:13px;margin-top:8px}.bar .sec{padding:6px 10px;font-size:13px}
 .del{background:transparent;color:var(--err);padding:4px 8px;font-size:13px}
 .bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bd);padding:10px 12px;display:flex;gap:8px;align-items:center}
 .bar .pri{flex:1;font-size:17px;padding:13px}
@@ -35,104 +36,158 @@ input.bad,select.bad{border-color:var(--err)}
 <div id="app"></div>
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyHWnJ4QBpY3zbP8ve__DtsUyRZpb88BsCHorEQiCSDWSK_1a1jX0XnmbYA6gOOfYV9/exec";
-const PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS","Factory"];
-const SUPS = new Set([713,759,763]);
-const DEPTS = {
- "النجارة":{sup:"عبد الظاهر محمد",workers:[[754,"محمود علي السيد"],[816,"وجيه إسماعيل"],[8025,"محمد فايز"]]},
- "الماكينات":{sup:"عبد الظاهر محمد",workers:[[713,"عبد الظاهر محمد (مشرف)"],[736,"بدير حسني"],[742,"أحمد متولي"]]},
- "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة (مشرف)"],[722,"محمود محمد"],[8012,"ناصر عويس"],[8018,"مدبولي محمد"]]},
- "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي (مشرف)"],[817,"طارق سيد"],[818,"سلامه سلامه"],[887,"محمد عبد الرحمن"],[8022,"اسلام احمد"],[8024,"عبد الله محمد"],[8027,"ايمن عابدين"]]}
+let PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS","Factory"];
+let SUPS = new Set([713,759,763]);
+let DEPTS = {
+ "النجارة":{sup:"عبد الظاهر محمد",workers:[[754,"محمود علي السيد عبد القادر عرفة"],[816,"وجيه إسماعيل حفنى سلطان"],[8025,"محمد فايز صابر جمعة"]]},
+ "الماكينات":{sup:"عبد الظاهر محمد",workers:[[713,"عبد الظاهر محمد جمعة عبد الله (مشرف)"],[736,"بدير حسني أحمد بنداري"],[742,"أحمد متولي عبد القادر الطنطاوي"]]},
+ "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
+ "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
+const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const today = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let dept = ls.get("dept",null), rows = {}, locs = {}, notice = null;
-
+let dept = ls.get("dept",null), rows = {}, locs = {}, notice = null, pending = null, date = today();
+const rnd=()=>Math.random().toString(36).slice(2,8);
+let who=ls.get("who",""),devId=ls.get("dev","");
+if(!devId){devId="D"+rnd();ls.set("dev",devId);}
+const devInfo=(navigator.userAgent.match(/\(([^)]+)\)/)||["",""])[1].slice(0,80);
+let hist=null;
+function applyCfg(c){if(c&&c.depts&&Object.keys(c.depts).length&&c.projects&&c.projects.length){DEPTS=c.depts;PROJECTS=c.projects;SUPS=new Set(c.sups||[]);ls.set("cfg",c);return true}return false}
+applyCfg(ls.get("cfg",null));
+if(dept&&!DEPTS[dept])dept=null;
+async function loadCfg(){try{const r=await fetch(SCRIPT_URL+"?action=cfg");const c=await r.json();if(applyCfg(c)&&!pending){if(dept&&!DEPTS[dept]){dept=null;localStorage.removeItem("dept");}else if(dept)fill();render();}}catch(e){}}
+const blank = () => ({project:"",item:"",desc:"",h1:"",h2:"",ev:false});
 function resetRows(){ rows={}; locs={}; if(dept) DEPTS[dept].workers.forEach(w=>{rows[w[0]]=[blank()];locs[w[0]]="المصنع";}); }
-function blank(){ return {project:"",item:"",desc:"",h1:"",h2:"",ev:false}; }
+function fill(){ DEPTS[dept].workers.forEach(w=>{ if(!rows[w[0]]||!rows[w[0]].length)rows[w[0]]=[blank()]; if(!locs[w[0]])locs[w[0]]="المصنع"; }); }
+function saveDraft(){ if(dept) ls.set("draft",{dept,date,rows,locs}); }
+function loadDraft(){ const d=ls.get("draft",null); if(d&&d.dept===dept&&d.rows){rows=d.rows;locs=d.locs||{};date=d.date||today();fill();} }
+function setDate(v){date=v;saveDraft();}
+function setAll(v){ if(!v)return; DEPTS[dept].workers.forEach(w=>locs[w[0]]=v); render(); }
+function copyLast(){ const l=ls.get("last",{})[dept]; if(!l)return; rows=JSON.parse(JSON.stringify(l.rows)); locs=l.locs||{}; fill(); notice={t:"تم نسخ آخر يومية. عدّل اللي اختلف (الساعات والبنود) وبعدين أرسل."}; render(); window.scrollTo(0,0); }
 
 function render(){
-  const app = $("#app");
-  if(!dept){
-    app.innerHTML = `<div class="card"><h1>يومية الإنتاج</h1><label>اختر قسمك (مرة واحدة)</label>
-      <select id="pick"><option value="">— اختر —</option>${Object.keys(DEPTS).map(d=>`<option>${d}</option>`).join("")}</select>
-      <p><button class="pri" onclick="setDept()">متابعة</button></p></div>`;
-    return;
+  const app=$("#app");
+  if(!dept||!who){
+    app.innerHTML=`<div class="card"><h1>يومية الإنتاج</h1><label>اسمك (اللي بيملا اليومية)</label><input id="who" value="${esc(who)}"><label>اختر قسمك</label>
+      <select id="pick"><option value="">— اختر —</option>${Object.keys(DEPTS).map(d=>`<option ${d==dept?"selected":""}>${d}</option>`).join("")}</select>
+      <p><button class="pri" onclick="setDept()">متابعة</button></p></div>`;return;
   }
-  const q = ls.get("queue",[]);
-  app.innerHTML = `
+  const q=ls.get("queue",[]), items=(ls.get("items",{})[dept]||[]);
+  app.innerHTML=`
    ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
-   <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup}</div></div>
+   <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)}</div></div>
      <button class="sec" onclick="changeDept()">تغيير</button></div>
-     <label>التاريخ</label><input type="date" id="date" value="${today()}"></div>
+     <label>التاريخ</label><input type="date" value="${date}" onchange="setDate(this.value)">
+     <label>تعيين مكان العمل للكل</label><select onchange="setAll(this.value)"><option value="">— اختر —</option>${LOCS.map(o=>`<option>${o}</option>`).join("")}</select>
+     <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
+   <datalist id="items">${items.map(i=>`<option value="${esc(i)}">`).join("")}</datalist>
    ${DEPTS[dept].workers.map(cardHtml).join("")}
-   <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} في الانتظار`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>`;
+   <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} لم يتأكد وصوله <button class="sec" onclick="flush()">إعادة المحاولة</button>`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>
+   ${pending?summaryHtml():""}
+   ${hist?histHtml():""}`;
+  saveDraft();
 }
 function cardHtml(w){
-  const c=w[0], sup=SUPS.has(c), L=locs[c], opt=o=>`<option ${L==o?"selected":""}>${o}</option>`;
-  let body="";
-  if(L==="أجازة") body=`<div class="badge" style="margin-top:10px">أجازة: لا حاجة لإدخال أي بيانات.</div>`;
-  else body=rows[c].map((r,i)=>rowHtml(c,i,r)).join("")+`<p style="margin:10px 0 0"><button class="sec" onclick="addRow(${c})">+ إضافة بند/مشروع آخر</button></p>`;
-  return `<div class="card"><h2>${w[1]}</h2><label>مكان العمل</label><select data-loc="${c}">${["المصنع","المشروع","أجازة"].map(opt).join("")}</select>${body}</div>`;
+  const c=w[0], L=locs[c], opt=o=>`<option ${L==o?"selected":""}>${o}</option>`;
+  const body=L==="أجازة"?`<div class="badge" style="margin-top:10px">أجازة: لا حاجة لإدخال أي بيانات.</div>`
+    :rows[c].map((r,i)=>rowHtml(c,i,r)).join("")+`<p style="margin:10px 0 0"><button class="sec" onclick="addRow(${c})">+ إضافة بند/مشروع آخر</button></p>`;
+  return `<div class="card"><h2>${w[1]}</h2><label>مكان العمل</label><select data-loc="${c}">${LOCS.map(opt).join("")}</select>${body}</div>`;
 }
 function rowHtml(c,i,r){
   const k=`data-c="${c}" data-i="${i}"`;
   return `<div class="row" id="r${c}_${i}">
    ${i>0?`<div style="text-align:left"><button class="del" onclick="delRow(${c},${i})">حذف الصف</button></div>`:""}
    <label>المشروع</label><select ${k} data-f="project"><option value="">— اختر —</option>${PROJECTS.map(p=>`<option ${r.project==p?"selected":""}>${p}</option>`).join("")}</select>
-   <label>البند</label><input ${k} data-f="item" value="${esc(r.item)}">
+   <label>البند</label><input ${k} data-f="item" list="items" autocomplete="off" value="${esc(r.item)}">
    <label>وصف العمل</label><input ${k} data-f="desc" value="${esc(r.desc)}">
    <label>ساعات العمل</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h1)}">
    <div class="chk"><input type="checkbox" id="ev${c}_${i}" ${k} data-f="ev" ${r.ev?"checked":""}><label for="ev${c}_${i}">اشتغل سهرة</label></div>
    ${r.ev?`<label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}">`:""}</div>`;
 }
-document.addEventListener("input",e=>{const t=e.target;if(t.dataset&&t.dataset.f==="ev"){rows[t.dataset.c][t.dataset.i].ev=t.checked;render();return;}if(t.dataset&&t.dataset.loc){locs[t.dataset.loc]=t.value;render();return;}if(t.dataset&&t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad")}});
-function setDept(){const v=$("#pick").value;if(!v)return;dept=v;ls.set("dept",v);resetRows();render();}
+document.addEventListener("input",e=>{const t=e.target;if(!t.dataset)return;
+  if(t.dataset.loc){locs[t.dataset.loc]=t.value;render();return;}
+  if(t.dataset.f==="ev"){rows[t.dataset.c][t.dataset.i].ev=t.checked;render();return;}
+  if(t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad");saveDraft();}});
+function setDept(){const v=$("#pick").value,n=$("#who").value.trim();if(!v||!n){alert("اكتب اسمك واختر القسم");return;}who=n;ls.set("who",n);dept=v;ls.set("dept",v);resetRows();loadDraft();render();}
 function changeDept(){if(confirm("تغيير القسم؟")){dept=null;localStorage.removeItem("dept");render();}}
 function addRow(c){rows[c].push(blank());render();}
 function delRow(c,i){rows[c].splice(i,1);render();}
 
+async function openHist(){hist={st:"load"};render();try{const r=await fetch(SCRIPT_URL+"?action=hist&dept="+encodeURIComponent(dept));hist={st:"ok",list:await r.json()};}catch(e){hist={st:"err"};}render();}
+function histHtml(){let b;
+  if(hist.st==="load")b="<p>جاري التحميل...</p>";
+  else if(hist.st==="err")b='<p class="warn">تعذر تحميل السجل. تأكد من الاتصال.</p>';
+  else b=hist.list.length?hist.list.map((h,i)=>`<div class="srow"><span>${esc(h.date)} · ${esc(h.by||"-")}<br><span class="badge">${h.n} صف · ${h.h} ساعة</span></span><button class="del" onclick="delBatch(${i})">حذف</button></div>`).join(""):"<p>لا يوجد إرسال في آخر أسبوعين.</p>";
+  return `<div class="modal"><div class="box"><h2>سجل ${dept}</h2>${b}<p><button class="sec" onclick="hist=null;render()">إغلاق</button></p></div></div>`;}
+async function delBatch(i){const h=hist.list[i];if(!confirm("حذف هذا الإرسال بالكامل من الشيت؟ تقدر تعيد إدخاله بعد كده."))return;
+  try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"del",id:h.id})});if((await r.text()).trim()!=="ok")throw 0;
+    const log=ls.get("sent",{});(h.codes||[]).forEach(c=>delete log[h.date+"|"+c]);ls.set("sent",log);}catch(e){alert("فشل الحذف");return;}
+  openHist();}
 function submitAll(){
-  const date=$("#date").value; let bad=0; const recs=[], marks=[];
+  let bad=0; const recs=[], marks=[];
   DEPTS[dept].workers.forEach(w=>{
-    const c=w[0], sup=SUPS.has(c), base={date,dept,supervisor:DEPTS[dept].sup,code:c,worker:w[1],loc:locs[c]};
+    const c=w[0], sup=SUPS.has(c), base={date,dept,supervisor:DEPTS[dept].sup,code:c,worker:w[1],loc:locs[c],submitter:who,devId,device:devInfo};
     if(locs[c]==="أجازة"){recs.push({...base,project:"",item:"",desc:"",h1:0,h2:0});return;}
     rows[c].forEach((r,i)=>{
-      const any=r.project||r.item||r.desc||r.h1||r.h2; if(!any)return;
+      if(!(r.project||r.item||r.desc||r.h1||r.h2))return;
       const ok=sup?!!r.project:(r.project&&r.item.trim()&&(r.ev?r.h2!=="":r.h1!==""));
       if(!ok){bad++;
         if(!r.project)marks.push([c,i,"project"]);
         if(!sup&&!r.item.trim())marks.push([c,i,"item"]);
         if(!sup&&!r.ev&&r.h1==="")marks.push([c,i,"h1"]);
-        if(!sup&&r.ev&&r.h2==="")marks.push([c,i,"h2"]);
-        return;}
+        if(!sup&&r.ev&&r.h2==="")marks.push([c,i,"h2"]);return;}
       recs.push({...base,project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:r.ev?Number(r.h2||0):0});
     });
   });
   if(bad){notice={e:1,t:"في صفوف ناقصة. راجع الخانات الحمراء."};render();marks.forEach(m=>{const el=document.querySelector(`[data-c="${m[0]}"][data-i="${m[1]}"][data-f="${m[2]}"]`);el&&el.classList.add("bad")});window.scrollTo(0,0);return;}
   if(!recs.length){notice={e:1,t:"مفيش بيانات للإرسال."};render();window.scrollTo(0,0);return;}
-  const q=ls.get("queue",[]);q.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,8),records:recs});ls.set("queue",q);
-  resetRows();notice={t:"تم الحفظ، جاري الإرسال..."};render();window.scrollTo(0,0);flush();
+  notice=null;pending=recs;render();
+}
+function summaryHtml(){
+  const by={};pending.forEach(r=>{const o=by[r.worker]=by[r.worker]||{h:0,loc:r.loc};o.h+=r.h1+r.h2;});
+  const tot=Object.values(by).reduce((a,b)=>a+b.h,0), miss=DEPTS[dept].workers.filter(w=>!by[w[1]]).map(w=>w[1]);
+  return `<div class="modal"><div class="box"><h2>مراجعة قبل الإرسال</h2><div class="badge">${date} · ${pending.length} صف</div>
+   ${Object.keys(by).map(n=>`<div class="srow"><span>${esc(n)}</span><b>${by[n].loc==="أجازة"?"أجازة":by[n].h+" ساعة"}</b></div>`).join("")}
+   <div class="srow"><span>الإجمالي</span><b>${tot} ساعة</b></div>
+   ${miss.length?`<div class="warn">لم يُسجَّل: ${miss.map(esc).join("، ")}</div>`:""}
+   <div class="g2" style="margin-top:12px"><button class="sec" onclick="pending=null;render()">رجوع</button><button class="pri" onclick="confirmSend()">تأكيد وإرسال</button></div></div></div>`;
+}
+function confirmSend(){
+  const log=ls.get("sent",{});
+  const dup=[...new Set(pending.filter(r=>log[r.date+"|"+r.code]).map(r=>r.worker))];
+  if(dup.length&&!confirm("اتبعتت يومية لنفس التاريخ قبل كده للعمال: "+dup.join("، ")+"\nتبعت تاني؟"))return;
+  const q=ls.get("queue",[]);q.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,8),records:pending});ls.set("queue",q);
+  pending.forEach(r=>log[r.date+"|"+r.code]=1);
+  const ks=Object.keys(log);if(ks.length>600)ks.slice(0,ks.length-600).forEach(k=>delete log[k]);ls.set("sent",log);
+  const it=ls.get("items",{}),cur=it[dept]||[];
+  pending.forEach(r=>{if(r.item){const i=cur.indexOf(r.item);if(i>-1)cur.splice(i,1);cur.unshift(r.item);}});it[dept]=cur.slice(0,60);ls.set("items",it);
+  const last=ls.get("last",{});last[dept]={rows,locs};ls.set("last",last);
+  localStorage.removeItem("draft");pending=null;date=today();resetRows();notice={t:"جاري الإرسال..."};render();window.scrollTo(0,0);flush();
 }
 let flushing=false;
 async function flush(){
   if(flushing)return;flushing=true;let sent=0;
   try{
-    let q=ls.get("queue",[]);
-    while(q.length&&navigator.onLine){
-      try{await fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(q[0])});}catch(e){break;}
-      q.shift();sent++;ls.set("queue",q);
+    const q=ls.get("queue",[]);
+    while(q.length){
+      try{
+        const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify(q[0])});
+        const t=(await r.text()).trim();
+        if(t==="ok"||t==="dup"){q.shift();sent++;ls.set("queue",q);}else break;
+      }catch(e){break;}
     }
   }finally{flushing=false;}
   const left=ls.get("queue",[]).length;
-  if(sent&&!left)notice={t:"✅ تم الإرسال بنجاح"};
-  else if(left)notice={e:1,t:"لا يوجد اتصال الآن. البيانات محفوظة وسيتم إرسالها تلقائياً."};
+  if(left)notice={e:1,t:`⚠️ لم يتأكد وصول ${left} إرسال للشيت. البيانات محفوظة وسيُعاد الإرسال، أو اضغط "إعادة المحاولة".`};
+  else if(sent)notice={t:"✅ تم الإرسال وتأكد وصوله للشيت"};
   render();
 }
 window.addEventListener("online",flush);
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
-resetRows();render();if(ls.get("queue",[]).length)flush();
+resetRows();if(dept)loadDraft();render();if(ls.get("queue",[]).length)flush();loadCfg();
 </script>
 </body>
 </html>
