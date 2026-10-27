@@ -22,6 +22,7 @@ button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:10p
 .pri{background:var(--pri);color:#fff}.sec{background:transparent;color:var(--pri);border:1px solid var(--pri)}
 .chk{display:flex;align-items:center;gap:8px;margin-top:10px}.chk input{width:auto}.chk label{margin:0;font-size:15px;color:var(--tx)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;z-index:9}.box{background:var(--card);width:100%;max-height:85vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}.srow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}.warn{color:var(--err);font-size:13px;margin-top:8px}.bar .sec{padding:6px 10px;font-size:13px}
+.tall{height:92vh}.chip{display:inline-block;background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:2px 8px;font-size:12px;margin-inline-end:6px}.hr{margin:4px 0 6px;font-size:14px}.hb{margin:10px 0}
 .del{background:transparent;color:var(--err);padding:4px 8px;font-size:13px}
 .bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bd);padding:10px 12px;display:flex;gap:8px;align-items:center}
 .bar .pri{flex:1;font-size:17px;padding:13px}
@@ -115,11 +116,25 @@ function addRow(c){rows[c].push(blank());render();}
 function delRow(c,i){rows[c].splice(i,1);render();}
 
 async function openHist(){hist={st:"load"};render();try{const r=await fetch(SCRIPT_URL+"?action=hist&dept="+encodeURIComponent(dept));hist={st:"ok",list:await r.json()};}catch(e){hist={st:"err"};}render();}
-function histHtml(){let b;
+function histHtml(){
+  let b;
   if(hist.st==="load")b="<p>جاري التحميل...</p>";
   else if(hist.st==="err")b='<p class="warn">تعذر تحميل السجل. تأكد من الاتصال.</p>';
-  else b=hist.list.length?hist.list.map((h,i)=>`<div class="srow"><span>${esc(h.date)} · ${esc(h.by||"-")}<br><span class="badge">${h.n} صف · ${h.h} ساعة</span></span><button class="del" onclick="delBatch(${i})">حذف</button></div>`).join(""):"<p>لا يوجد إرسال في آخر أسبوعين.</p>";
-  return `<div class="modal"><div class="box"><h2>سجل ${dept}</h2>${b}<p><button class="sec" onclick="hist=null;render()">إغلاق</button></p></div></div>`;}
+  else{
+    const L=hist.list, dates=[...new Set(L.map(x=>x.date))], fd=hist.fd||"";
+    const sel=L.map((x,i)=>[x,i]).filter(x=>!fd||x[0].date===fd);
+    const t1=sel.reduce((a,x)=>a+x[0].h1,0), t2=sel.reduce((a,x)=>a+x[0].h2,0);
+    b=`<select onchange="hist.fd=this.value;render()"><option value="">كل الأيام (${dates.length})</option>${dates.map(d=>`<option ${d===fd?"selected":""}>${d}</option>`).join("")}</select>
+    <div class="srow"><span>${sel.length} إرسال</span><b>عمل ${t1} · سهرة ${t2} ساعة</b></div>`+(sel.length?sel.map(x=>batchHtml(x[0],x[1])).join(""):"<p>لا يوجد إرسال.</p>");
+  }
+  return `<div class="modal"><div class="box tall"><div class="top"><h2>سجل ${dept} - آخر أسبوعين</h2><button class="sec" onclick="hist=null;render()">إغلاق</button></div>${b}</div></div>`;
+}
+function batchHtml(h,i){
+  const by={};h.rows.forEach(r=>(by[r.w]=by[r.w]||[]).push(r));
+  return `<div class="card hb"><div class="top"><div><b>${esc(h.date)}</b> · ${esc(h.t||"")}<div class="badge">المُرسِل: ${esc(h.by||"-")}${h.dv?" · "+esc(String(h.dv).slice(0,40)):""}</div></div><button class="del" onclick="delBatch(${i})">حذف الإرسال</button></div>
+  ${Object.keys(by).map(w=>`<div class="row"><b>${esc(w)}</b>${by[w].map(r=>`<div class="hr"><span>${r.l==="أجازة"?"أجازة":esc(r.l)+" · "+esc(r.p||"-")+(r.i?" · "+esc(r.i):"")}</span>${r.d?`<div class="badge">${esc(r.d)}</div>`:""}${r.l==="أجازة"?"":`<span class="chip">عمل ${r.a}</span>${r.b?`<span class="chip">سهرة ${r.b}</span>`:""}`}</div>`).join("")}</div>`).join("")}
+  <div class="srow"><span>${h.n} صف</span><b>عمل ${h.h1} · سهرة ${h.h2}</b></div></div>`;
+}
 async function delBatch(i){const h=hist.list[i];if(!confirm("حذف هذا الإرسال بالكامل من الشيت؟ تقدر تعيد إدخاله بعد كده."))return;
   try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"del",id:h.id})});if((await r.text()).trim()!=="ok")throw 0;
     const log=ls.get("sent",{});(h.codes||[]).forEach(c=>delete log[h.date+"|"+c]);ls.set("sent",log);}catch(e){alert("فشل الحذف");return;}
