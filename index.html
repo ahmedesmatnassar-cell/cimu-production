@@ -65,7 +65,6 @@ function fill(){ DEPTS[dept].workers.forEach(w=>{ if(!rows[w[0]]||!rows[w[0]].le
 function saveDraft(){ if(dept) ls.set("draft",{dept,date,rows,locs}); }
 function loadDraft(){ const d=ls.get("draft",null); if(d&&d.dept===dept&&d.rows){rows=d.rows;locs=d.locs||{};date=d.date||today();fill();} }
 function setDate(v){date=v;saveDraft();}
-function setAll(v){ if(!v)return; DEPTS[dept].workers.forEach(w=>locs[w[0]]=v); render(); }
 function copyLast(){ const l=ls.get("last",{})[dept]; if(!l)return; rows=JSON.parse(JSON.stringify(l.rows)); locs=l.locs||{}; fill(); notice={t:"تم نسخ آخر يومية. عدّل اللي اختلف (الساعات والبنود) وبعدين أرسل."}; render(); window.scrollTo(0,0); }
 
 function render(){
@@ -81,7 +80,6 @@ function render(){
    <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)}</div></div>
      <button class="sec" onclick="changeDept()">تغيير</button></div>
      <label>التاريخ</label><input type="date" value="${date}" onchange="setDate(this.value)">
-     <label>تعيين مكان العمل للكل</label><select onchange="setAll(this.value)"><option value="">— اختر —</option>${LOCS.map(o=>`<option>${o}</option>`).join("")}</select>
      <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
    <datalist id="items">${items.map(i=>`<option value="${esc(i)}">`).join("")}</datalist>
    ${DEPTS[dept].workers.map(cardHtml).join("")}
