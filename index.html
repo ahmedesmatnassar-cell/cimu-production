@@ -45,6 +45,7 @@ let DEPTS = {
  "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
  "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
+const VER="2.4";
 const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -78,7 +79,7 @@ function render(){
   const q=ls.get("queue",[]), items=(ls.get("items",{})[dept]||[]);
   app.innerHTML=`
    ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
-   <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)}</div></div>
+   <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)} · v${VER}</div></div>
      <button class="sec" onclick="changeDept()">تغيير</button></div>
      <label>التاريخ</label><input type="date" value="${date}" onchange="setDate(this.value)">
      <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
@@ -115,11 +116,12 @@ function changeDept(){if(confirm("تغيير القسم؟")){dept=null;localStor
 function addRow(c){rows[c].push(blank());render();}
 function delRow(c,i){rows[c].splice(i,1);render();}
 
-async function openHist(){hist={st:"load"};render();try{const r=await fetch(SCRIPT_URL+"?action=hist&dept="+encodeURIComponent(dept));hist={st:"ok",list:await r.json()};}catch(e){hist={st:"err"};}render();}
+async function openHist(){hist={st:"load"};render();try{const ac=new AbortController();setTimeout(()=>ac.abort(),20000);const r=await fetch(SCRIPT_URL+"?action=hist&dept="+encodeURIComponent(dept),{signal:ac.signal});const L=await r.json();hist=(Array.isArray(L)&&(!L.length||L[0].rows))?{st:"ok",list:L}:{st:"old"};}catch(e){hist={st:"err",m:String(e).slice(0,120)};}render();}
 function histHtml(){
   let b;
   if(hist.st==="load")b="<p>جاري التحميل...</p>";
-  else if(hist.st==="err")b='<p class="warn">تعذر تحميل السجل. تأكد من الاتصال.</p>';
+  else if(hist.st==="old")b='<p class="warn">كود Apps Script لسه على نسخة قديمة. الصق Code.gs الجديد واعمل: نشر ← إدارة عمليات النشر ← ✏️ ← إصدار جديد ← نشر.</p>';
+  else if(hist.st==="err")b='<p class="warn">تعذر تحميل السجل. تأكد من الاتصال، أو أن نشر Apps Script على "أي شخص".<br><span class="badge">'+esc(hist.m||"")+'</span></p>';
   else{
     const L=hist.list, dates=[...new Set(L.map(x=>x.date))], fd=hist.fd||"";
     const sel=L.map((x,i)=>[x,i]).filter(x=>!fd||x[0].date===fd);
