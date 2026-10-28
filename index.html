@@ -36,7 +36,7 @@ input.bad,select.bad{border-color:var(--err)}
 <body>
 <div id="app"></div>
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyHWnJ4QBpY3zbP8ve__DtsUyRZpb88BsCHorEQiCSDWSK_1a1jX0XnmbYA6gOOfYV9/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzIXXjU7VI_wqqy6CsGs82R72E6_0jvTBZIZifojV1m1vZhjZD_Zm_pj-oRVZP4rkxP/exec";
 let PROJECTS = ["SPA","Mazzej-2","NXT","ICR-7","ICR-6","ICR-5","MCS","Factory"];
 let SUPS = new Set([713,759,763]);
 let DEPTS = {
@@ -45,7 +45,7 @@ let DEPTS = {
  "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
  "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
-const VER="2.4";
+const VER="2.5";
 const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
