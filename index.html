@@ -47,7 +47,7 @@ let DEPTS = {
  "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
  "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
-const VER="3.0";
+const VER="3.1";
 const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -102,13 +102,25 @@ function cardHtml(w){
     :rows[c].map((r,i)=>rowHtml(c,i,r)).join("")+`<p style="margin:10px 0 0"><button class="sec" onclick="addRow(${c})">+ إضافة بند/مشروع آخر</button></p>`;
   return `<div class="card"><div class="top"><h2>${w[1]}${w[2]?` <span class="badge">(معار من ${esc(w[2])})</span>`:""}</h2>${w[2]?`<button class="del" onclick="rmExtra(${c})">إزالة</button>`:""}</div><label>مكان العمل</label><select data-loc="${c}">${LOCS.map(opt).join("")}</select>${body}</div>`;
 }
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const mic=(c,i,f)=>SR?`<button class="sec" type="button" onclick="voice(${c},${i},'${f}',this)" title="إدخال صوتي">🎤</button>`:"";
+let rec=null;
+function voice(c,i,f,btn){
+  if(rec){rec.stop();return;}
+  let err="";rec=new SR();rec.lang="ar-EG";rec.interimResults=false;rec.maxAlternatives=1;btn.textContent="🔴";
+  rec.onresult=e=>{const t=e.results[0][0].transcript.trim(),r=rows[c][i];r[f]=(r[f]?r[f]+" ":"")+t;
+    const el=document.querySelector(`[data-c="${c}"][data-i="${i}"][data-f="${f}"]`);if(el)el.value=r[f];saveDraft();};
+  rec.onerror=e=>{err=e.error==="not-allowed"?"اسمح للتطبيق باستخدام الميكروفون من إعدادات المتصفح.":e.error==="network"?"التعرف على الصوت محتاج إنترنت.":e.error==="no-speech"?"ما سمعتش صوت، حاول تاني.":"تعذر التسجيل ("+e.error+")";};
+  rec.onend=()=>{rec=null;btn.textContent="🎤";if(err){notice={e:1,t:err};render();window.scrollTo(0,0);}};
+  try{rec.start();}catch(x){rec=null;btn.textContent="🎤";}
+}
 function rowHtml(c,i,r){
   const k=`data-c="${c}" data-i="${i}"`;
   return `<div class="row" id="r${c}_${i}">
    ${i>0?`<div style="text-align:left"><button class="del" onclick="delRow(${c},${i})">حذف الصف</button></div>`:""}
    <label>المشروع</label><select ${k} data-f="project"><option value="">— اختر —</option>${PROJECTS.map(p=>`<option ${r.project==p?"selected":""}>${p}</option>`).join("")}</select>
-   <label>البند</label><input ${k} data-f="item" list="items" autocomplete="off" value="${esc(r.item)}">
-   <label>وصف العمل</label><input ${k} data-f="desc" value="${esc(r.desc)}">
+   <label>البند</label><div style="display:flex;gap:6px"><input ${k} data-f="item" list="items" autocomplete="off" value="${esc(r.item)}" style="flex:1">${mic(c,i,"item")}</div>
+   <label>وصف العمل</label><div style="display:flex;gap:6px"><input ${k} data-f="desc" value="${esc(r.desc)}" style="flex:1">${mic(c,i,"desc")}</div>
    <label>ساعات العمل</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="8" step="0.5" value="${esc(r.h1)}">
    <div class="chk"><input type="checkbox" id="ev${c}_${i}" ${k} data-f="ev" ${r.ev?"checked":""}><label for="ev${c}_${i}">اشتغل سهرة</label></div>
    ${r.ev?`<label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}">`:""}</div>`;
