@@ -47,13 +47,13 @@ let DEPTS = {
  "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
  "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
-const VER="2.8";
+const VER="3.0";
 const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const today = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let dept = ls.get("dept",null), rows = {}, locs = {}, notice = null, pending = null, date = today();
+let dept = ls.get("dept",null), rows = {}, locs = {}, notice = null, pending = null, date = today(), extra = [], dpass = "", ed = null, xm = null;
 const rnd=()=>Math.random().toString(36).slice(2,8);
 let who=ls.get("who",""),devId=ls.get("dev","");
 if(!devId){devId="D"+rnd();ls.set("dev",devId);}
@@ -64,11 +64,13 @@ applyCfg(ls.get("cfg",null));
 if(dept&&!DEPTS[dept])dept=null;
 async function loadCfg(){try{const r=await fetch(SCRIPT_URL+"?action=cfg");const c=await r.json();if(applyCfg(c)&&!pending){if(dept&&!DEPTS[dept]){dept=null;localStorage.removeItem("dept");}else if(dept)fill();render();}}catch(e){}}
 const blank = () => ({project:"",item:"",desc:"",h1:"",h2:"",ev:false});
-function resetRows(){ rows={}; locs={}; if(dept) DEPTS[dept].workers.forEach(w=>{rows[w[0]]=[blank()];locs[w[0]]="المصنع";}); }
-function fill(){ if(!dept||!DEPTS[dept])return; DEPTS[dept].workers.forEach(w=>{ if(!rows[w[0]]||!rows[w[0]].length)rows[w[0]]=[blank()]; if(!locs[w[0]])locs[w[0]]="المصنع"; }); }
-function saveDraft(){ if(dept) ls.set("draft",{dept,date,rows,locs}); }
-function loadDraft(){ const d=ls.get("draft",null); if(d&&d.dept===dept&&d.rows){rows=d.rows;locs=d.locs||{};date=d.date||today();fill();} }
-function setDate(v){date=v;saveDraft();}
+const wl=()=>DEPTS[dept].workers.concat(extra);
+const minDate=()=>{const d=new Date(Date.now()-3*864e5);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+function resetRows(){ rows={}; locs={}; extra=[]; if(dept) wl().forEach(w=>{rows[w[0]]=[blank()];locs[w[0]]="المصنع";}); }
+function fill(){ if(!dept||!DEPTS[dept])return; wl().forEach(w=>{ if(!rows[w[0]]||!rows[w[0]].length)rows[w[0]]=[blank()]; if(!locs[w[0]])locs[w[0]]="المصنع"; }); }
+function saveDraft(){ if(dept) ls.set("draft",{dept,date,rows,locs,extra}); }
+function loadDraft(){ const d=ls.get("draft",null); if(d&&d.dept===dept&&d.rows){rows=d.rows;locs=d.locs||{};date=d.date||today();extra=d.extra||[];fill();} }
+function setDate(v){if(v>today()||(v<minDate()&&!dpass)){alert("التاريخ غير مسموح: لا يمكن اختيار تاريخ مستقبلي أو أقدم من 3 أيام.");render();return;}date=v;saveDraft();}
 function copyLast(){ const l=ls.get("last",{})[dept]; if(!l)return; rows=JSON.parse(JSON.stringify(l.rows)); locs=l.locs||{}; fill(); notice={t:"تم نسخ آخر يومية. عدّل اللي اختلف (الساعات والبنود) وبعدين أرسل."}; render(); window.scrollTo(0,0); }
 
 function render(){
@@ -84,21 +86,21 @@ function render(){
    ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
    <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)} · v${VER}</div></div>
      <button class="sec" onclick="changeDept()">تغيير</button></div>
-     <label>التاريخ</label><div style="display:flex;gap:8px"><input type="date" value="${date}" onchange="setDate(this.value)" style="flex:1"><button class="sec" onclick="setDate(today());render()">اليوم</button></div>${date!==today()?`<div class="warn">⚠️ تاريخ اليومية ${date} مختلف عن تاريخ اليوم</div>`:""}
-     <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
+     <label>التاريخ</label><div style="display:flex;gap:8px"><input type="date" value="${date}" max="${today()}" ${dpass?"":`min="${minDate()}"`} onchange="setDate(this.value)" style="flex:1"><button class="sec" onclick="setDate(today());render()">اليوم</button></div>${dpass?"":`<p style="margin:6px 0 0"><button class="sec" onclick="adm={st:'pass',then:'date'};render()">🔓 تاريخ أقدم (مدير)</button></p>`}${date!==today()?`<div class="warn">⚠️ تاريخ اليومية ${date} مختلف عن تاريخ اليوم</div>`:""}
+     <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="xm={d:''};render()">👥 عامل من قسم آخر</button><button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
    <datalist id="items">${items.map(i=>`<option value="${esc(i)}">`).join("")}</datalist>
-   ${DEPTS[dept].workers.map(cardHtml).join("")}
+   ${wl().map(cardHtml).join("")}
    <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} لم يتأكد وصوله <button class="sec" onclick="flush()">إعادة المحاولة</button>`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>
    ${pending?summaryHtml():""}
    ${hist?histHtml():""}
-   ${adm?admHtml():""}`;
+   ${adm?admHtml():""}${ed?edHtml():""}${xm?xmHtml():""}`;
   saveDraft();
 }
 function cardHtml(w){
   const c=w[0], L=locs[c], opt=o=>`<option ${L==o?"selected":""}>${o}</option>`;
   const body=L==="أجازة"?`<div class="badge" style="margin-top:10px">أجازة: لا حاجة لإدخال أي بيانات.</div>`
     :rows[c].map((r,i)=>rowHtml(c,i,r)).join("")+`<p style="margin:10px 0 0"><button class="sec" onclick="addRow(${c})">+ إضافة بند/مشروع آخر</button></p>`;
-  return `<div class="card"><h2>${w[1]}</h2><label>مكان العمل</label><select data-loc="${c}">${LOCS.map(opt).join("")}</select>${body}</div>`;
+  return `<div class="card"><div class="top"><h2>${w[1]}${w[2]?` <span class="badge">(معار من ${esc(w[2])})</span>`:""}</h2>${w[2]?`<button class="del" onclick="rmExtra(${c})">إزالة</button>`:""}</div><label>مكان العمل</label><select data-loc="${c}">${LOCS.map(opt).join("")}</select>${body}</div>`;
 }
 function rowHtml(c,i,r){
   const k=`data-c="${c}" data-i="${i}"`;
@@ -137,11 +139,25 @@ function histHtml(){
   return `<div class="modal"><div class="box tall"><div class="top"><h2>سجل ${dept} - آخر أسبوعين</h2><button class="sec" onclick="hist=null;render()">إغلاق</button></div>${b}</div></div>`;
 }
 function batchHtml(h,i){
-  const by={};h.rows.forEach(r=>(by[r.w]=by[r.w]||[]).push(r));
+  const by={};h.rows.forEach((r,k)=>(by[r.w]=by[r.w]||[]).push([r,k]));
   return `<div class="card hb"><div class="top"><div><b>${esc(h.date)}</b> · ${esc(h.t||"")}<div class="badge">المُرسِل: ${esc(h.by||"-")}${h.dv?" · "+esc(String(h.dv).slice(0,40)):""}</div></div><button class="del" onclick="delBatch(${i})">حذف الإرسال</button></div>
-  ${Object.keys(by).map(w=>`<div class="row"><b>${esc(w)}</b>${by[w].map(r=>`<div class="hr"><span>${r.l==="أجازة"?"أجازة":esc(r.l)+" · "+esc(r.p||"-")+(r.i?" · "+esc(r.i):"")}</span>${r.d?`<div class="badge">${esc(r.d)}</div>`:""}${r.l==="أجازة"?"":`<span class="chip">عمل ${r.a}</span>${r.b?`<span class="chip">سهرة ${r.b}</span>`:""}`}</div>`).join("")}</div>`).join("")}
+  ${Object.keys(by).map(w=>`<div class="row"><b>${esc(w)}</b>${by[w].map(([r,k])=>`<div class="hr"><span>${r.l==="أجازة"?"أجازة":esc(r.l)+" · "+esc(r.p||"-")+(r.i?" · "+esc(r.i):"")}</span>${r.d?`<div class="badge">${esc(r.d)}</div>`:""}${r.l==="أجازة"?"":`<span class="chip">عمل ${r.a}</span>${r.b?`<span class="chip">سهرة ${r.b}</span>`:""}`}<button class="del" onclick="editRow(${i},${k})">✏️ تعديل</button></div>`).join("")}</div>`).join("")}
   <div class="srow"><span>${h.n} صف</span><b>عمل ${h.h1} · سهرة ${h.h2}</b></div></div>`;
 }
+function editRow(i,k){const h=hist.list[i],r=h.rows[k];ed={id:h.id,k,w:r.w,f:{l:r.l,p:r.p||"",i:r.i||"",d:r.d||"",a:r.a,b:r.b}};render();}
+function edHtml(){const f=ed.f;return `<div class="modal" style="z-index:12"><div class="box"><h2>تعديل: ${esc(ed.w)}</h2>
+ <label>مكان العمل</label><select id="el">${LOCS.map(o=>`<option ${f.l===o?"selected":""}>${o}</option>`).join("")}</select>
+ <label>المشروع</label><select id="ep"><option value="">—</option>${PROJECTS.map(p=>`<option ${f.p===p?"selected":""}>${p}</option>`).join("")}</select>
+ <label>البند</label><input id="ei" value="${esc(f.i)}"><label>وصف العمل</label><input id="ed" value="${esc(f.d)}">
+ <div class="g2"><div><label>ساعات العمل (0-8)</label><input id="ea" type="number" inputmode="decimal" min="0" max="8" step="0.5" value="${f.a}"></div><div><label>ساعات السهرة</label><input id="eb" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${f.b}"></div></div>
+ ${ed.m?`<div class="warn">${ed.m}</div>`:""}<div class="g2" style="margin-top:12px"><button class="sec" onclick="ed=null;render()">إلغاء</button><button class="pri" onclick="saveEdit()">حفظ</button></div></div></div>`;}
+async function saveEdit(){const L=$("#el").value,a=Number($("#ea").value||0),b=Number($("#eb").value||0);
+  const f=L==="أجازة"?{l:L,p:"",i:"",d:"",a:0,b:0}:{l:L,p:$("#ep").value,i:$("#ei").value.trim(),d:$("#ed").value.trim(),a,b};ed.f=f;
+  if(a>8||a<0){ed.m="ساعات العمل بين 0 و8";render();return;}
+  if(L!=="أجازة"&&!f.p){ed.m="اختر المشروع";render();return;}
+  try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"edit",id:ed.id,k:ed.k,f})});const t=(await r.text()).trim();
+    if(t==="ok"){ed=null;openHist();return;}ed.m=t.startsWith("over")?"المجموع يتجاوز 8 ساعات لهذا العامل في اليوم":"فشل التعديل";}
+  catch(e){ed.m="تعذر الاتصال";}render();}
 async function delBatch(i){const h=hist.list[i];if(!confirm("حذف هذا الإرسال بالكامل من الشيت؟ تقدر تعيد إدخاله بعد كده."))return;
   try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"del",id:h.id})});if((await r.text()).trim()!=="ok")throw 0;
     const log=ls.get("sent",{});(h.codes||[]).forEach(c=>delete log[h.date+"|"+c]);ls.set("sent",log);}catch(e){alert("فشل الحذف");return;}
@@ -151,22 +167,40 @@ function tick(){const n=new Date(),L="ar-EG-u-nu-latn",a=$("#ck1"),b=$("#ck2");i
   b.textContent=n.toLocaleTimeString(L,{hour:"2-digit",minute:"2-digit",second:"2-digit"});}
 setInterval(tick,1000);tick();
 const cp=o=>JSON.parse(JSON.stringify(o));
+function xmHtml(){const ds=Object.keys(DEPTS).filter(x=>x!==dept),d=xm.d||ds[0],ws=DEPTS[d].workers.filter(w=>!wl().some(x=>x[0]===w[0]));
+  return `<div class="modal"><div class="box"><h2>عامل من قسم آخر (لليوم ده)</h2><label>القسم</label><select onchange="xm.d=this.value;render()">${ds.map(x=>`<option ${x===d?"selected":""}>${esc(x)}</option>`).join("")}</select><label>العامل</label><select id="xw">${ws.map(w=>`<option value="${w[0]}">${esc(w[1])}</option>`).join("")}</select><div class="g2" style="margin-top:12px"><button class="sec" onclick="xm=null;render()">إلغاء</button><button class="pri" onclick="addExtra('${d}')">إضافة</button></div></div></div>`;}
+function addExtra(d){const c=Number($("#xw")&&$("#xw").value),w=DEPTS[d].workers.find(x=>x[0]===c);if(!w)return;extra.push([w[0],w[1],d]);rows[c]=[blank()];locs[c]="المصنع";xm=null;render();}
+function rmExtra(c){extra=extra.filter(x=>x[0]!==c);delete rows[c];delete locs[c];render();}
+function restore(b){if(!b||!b.records||!dept)return;resetRows();date=b.records[0].date;
+  b.records.forEach(r=>{let w=wl().find(x=>x[0]===r.code);if(!w){for(const d in DEPTS){const f=DEPTS[d].workers.find(x=>x[0]===r.code);if(f){extra.push([f[0],f[1],d]);w=extra[extra.length-1];break;}}}
+    if(!w)return;const c=w[0];locs[c]=r.loc;if(r.loc==="أجازة")return;
+    const row={project:r.project,item:r.item,desc:r.desc,h1:r.h1?String(r.h1):"",h2:r.h2?String(r.h2):"",ev:r.h2>0};
+    if(!rows[c]||(rows[c].length===1&&!rows[c][0].project&&!rows[c][0].item))rows[c]=[row];else rows[c].push(row);});
+  saveDraft();}
 function openAdmin(){adm={st:"pass"};render();}
-async function admLogin(){const pw=$("#apw").value;if(!pw)return;
+async function admLogin(){const pw=$("#apw").value,then=adm.then;if(!pw)return;
   try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"auth",pass:pw})});const t=(await r.text()).trim();
-    if(t==="ok")adm={st:"edit",pw,c:cp({depts:DEPTS,projects:PROJECTS,sups:[...SUPS]})};
-    else adm={st:"pass",m:t==="unset"?"لم تُحدَّد كلمة مرور في Code.gs (ADMIN_PASS).":"كلمة المرور غلط"};}
-  catch(e){adm={st:"pass",m:"تعذر الاتصال"};}render();}
+    if(t==="ok"){if(then==="date"){dpass=pw;adm=null;notice={t:"🔓 تم فتح التواريخ الأقدم لهذه الجلسة."};}else{adm={st:"edit",tab:"dash",pw,c:cp({depts:DEPTS,projects:PROJECTS,sups:[...SUPS]})};admDash();}}
+    else adm={st:"pass",then,m:t==="unset"?"لم تُحدَّد كلمة مرور في Code.gs (ADMIN_PASS).":"كلمة المرور غلط"};}
+  catch(e){adm={st:"pass",then,m:"تعذر الاتصال"};}render();}
+async function admDash(){if(!adm)return;adm.dash=null;try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"dash",pass:adm.pw})});adm.dash=await r.json();}catch(e){adm.dash="err";}render();}
+function dashHtml(){const d=adm.dash;if(!d)return "<p>جاري التحميل...</p>";if(d==="err")return '<p class="warn">تعذر تحميل اللوحة. تأكد إن Code.gs الجديد منشور.</p>';
+  const done=d.today.filter(x=>x.s!=="none").length,dep={};d.today.forEach(x=>(dep[x.d]=dep[x.d]||[]).push(x));
+  return `<div class="srow"><span>${esc(d.date)} · سلّم</span><b>${done} من ${d.today.length}</b></div><p><button class="sec" onclick="admDash()">🔄 تحديث</button></p>
+  ${Object.keys(dep).map(k=>`<div class="card"><h2>${esc(k)}</h2>${dep[k].map(x=>`<div class="srow"><span>${x.s==="ok"?"✅":x.s==="leave"?"🌴":"❌"} ${esc(x.w)}</span><b>${x.s==="ok"?x.h+" ساعة":x.s==="leave"?"أجازة":"لم يُسجَّل"}</b></div>`).join("")}</div>`).join("")}
+  <div class="card"><h2>ساعات الشهر لكل مشروع</h2>${d.projects.length?d.projects.map(p=>`<div class="srow"><span>${esc(p.p)}</span><b>عمل ${p.a} · سهرة ${p.b}</b></div>`).join(""):"<p>لا بيانات</p>"}</div>
+  <div class="card"><h2>أيام الأجازة هذا الشهر</h2>${d.leaves.length?d.leaves.map(l=>`<div class="srow"><span>${esc(l.w)}</span><b>${l.n} يوم</b></div>`).join(""):"<p>لا أجازات</p>"}</div>`;}
 function admHtml(){
-  if(adm.st==="pass")return `<div class="modal"><div class="box"><h2>⚙️ الإعدادات</h2><label>كلمة المرور</label><input type="password" id="apw" autocomplete="off">${adm.m?`<div class="warn">${adm.m}</div>`:""}<div class="g2" style="margin-top:12px"><button class="sec" onclick="adm=null;render()">إلغاء</button><button class="pri" onclick="admLogin()">دخول</button></div></div></div>`;
-  const c=adm.c, ds=Object.keys(c.depts);
-  return `<div class="modal"><div class="box tall"><div class="top"><h2>⚙️ الإعدادات</h2><button class="sec" onclick="adm=null;render()">إغلاق</button></div>
-  ${adm.m?`<div class="msg ${adm.e?"e":""}">${adm.m}</div>`:""}
+  if(adm.st==="pass")return `<div class="modal"><div class="box"><h2>${adm.then==="date"?"🔓 تاريخ أقدم":"⚙️ الإعدادات"}</h2><label>كلمة المرور</label><input type="password" id="apw" autocomplete="off">${adm.m?`<div class="warn">${adm.m}</div>`:""}<div class="g2" style="margin-top:12px"><button class="sec" onclick="adm=null;render()">إلغاء</button><button class="pri" onclick="admLogin()">دخول</button></div></div></div>`;
+  const c=adm.c, ds=Object.keys(c.depts), dash=adm.tab==="dash";
+  const tabs=`<div class="g2" style="margin:8px 0"><button class="${dash?"pri":"sec"}" onclick="adm.tab='dash';render()">📊 المتابعة</button><button class="${dash?"sec":"pri"}" onclick="adm.tab='set';render()">⚙️ الإعدادات</button></div>`;
+  const set=`${adm.m?`<div class="msg ${adm.e?"e":""}">${adm.m}</div>`:""}
   ${ds.map(d=>`<div class="card"><h2>${esc(d)}</h2><label>اسم مشرف القسم</label><input value="${esc(c.depts[d].sup)}" onchange="adm.c.depts['${d}'].sup=this.value">
    ${c.depts[d].workers.map((w,i)=>`<div class="row"><div class="g2"><input value="${esc(w[1])}" onchange="adm.c.depts['${d}'].workers[${i}][1]=this.value"><input value="${w[0]}" disabled></div><div class="chk"><input type="checkbox" ${c.sups.includes(w[0])?"checked":""} onchange="admSup(${w[0]},this.checked)"><label>مشرف</label><button class="del" onclick="admDel('${d}',${i})">حذف</button></div></div>`).join("")}</div>`).join("")}
   <div class="card"><h2>➕ إضافة موظف</h2><label>القسم</label><select id="nd">${ds.map(d=>`<option>${esc(d)}</option>`).join("")}</select><label>الكود</label><input id="nc" inputmode="numeric"><label>الاسم الكامل</label><input id="nn"><div class="chk"><input type="checkbox" id="ns"><label for="ns">مشرف</label></div><p><button class="sec" onclick="admAdd()">إضافة</button></p></div>
   <div class="card"><h2>المشاريع</h2>${c.projects.map((p,i)=>`<div class="srow"><span>${esc(p)}</span><button class="del" onclick="admDelP(${i})">حذف</button></div>`).join("")}<div class="g2" style="margin-top:8px"><input id="np" placeholder="مشروع جديد"><button class="sec" onclick="admAddP()">إضافة</button></div></div>
-  <div style="height:70px"></div><div class="bar"><button class="pri" onclick="admSave()">حفظ الإعدادات</button></div></div></div>`;
+  <div style="height:70px"></div><div class="bar"><button class="pri" onclick="admSave()">حفظ الإعدادات</button></div>`;
+  return `<div class="modal"><div class="box tall"><div class="top"><h2>لوحة الإدارة</h2><button class="sec" onclick="adm=null;render()">إغلاق</button></div>${tabs}${dash?dashHtml():set}</div></div>`;
 }
 function admSup(c,on){const s=adm.c.sups,i=s.indexOf(c);if(on&&i<0)s.push(c);if(!on&&i>-1)s.splice(i,1);}
 function admDel(d,i){const w=adm.c.depts[d].workers[i];if(!confirm("حذف "+w[1]+"؟"))return;adm.c.depts[d].workers.splice(i,1);adm.c.sups=adm.c.sups.filter(x=>x!==w[0]);adm.m="تم الحذف (اضغط حفظ الإعدادات)";adm.e=0;render();}
@@ -181,8 +215,9 @@ async function admSave(){adm.m="جاري الحفظ...";adm.e=0;render();
     if(t==="ok"){applyCfg(cp(adm.c));fill();adm.m="✅ تم الحفظ. باقي الأجهزة بتتحدث عند فتح التطبيق.";}else{adm.m="فشل الحفظ: "+t;adm.e=1;}}
   catch(e){adm.m="تعذر الاتصال";adm.e=1;}render();}
 function submitAll(){
-  let bad=0; const recs=[], marks=[];
-  DEPTS[dept].workers.forEach(w=>{
+  if(date>today()||(date<minDate()&&!dpass)){notice={e:1,t:"التاريخ غير مسموح (مستقبلي أو أقدم من 3 أيام)."};render();window.scrollTo(0,0);return;}
+  let bad=0,o8=0; const recs=[], marks=[], tot={};
+  wl().forEach(w=>{
     const c=w[0], sup=SUPS.has(c), base={date,dept,supervisor:DEPTS[dept].sup,code:c,worker:w[1],loc:locs[c],submitter:who,devId,device:devInfo};
     if(locs[c]==="أجازة"){recs.push({...base,project:"",item:"",desc:"",h1:0,h2:0});return;}
     rows[c].forEach((r,i)=>{
@@ -193,10 +228,12 @@ function submitAll(){
         if(!sup&&!r.item.trim())marks.push([c,i,"item"]);
         if(over||(!sup&&!r.ev&&r.h1===""))marks.push([c,i,"h1"]);
         if(!sup&&r.ev&&r.h2==="")marks.push([c,i,"h2"]);return;}
+      tot[c]=(tot[c]||0)+Number(r.h1||0);
       recs.push({...base,project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:r.ev?Number(r.h2||0):0});
     });
   });
-  if(bad){notice={e:1,t:"في صفوف ناقصة. راجع الخانات الحمراء."};render();marks.forEach(m=>{const el=document.querySelector(`[data-c="${m[0]}"][data-i="${m[1]}"][data-f="${m[2]}"]`);el&&el.classList.add("bad")});window.scrollTo(0,0);return;}
+  Object.keys(tot).forEach(c=>{if(tot[c]>8){bad++;o8=1;rows[c].forEach((r,i)=>marks.push([c,i,"h1"]));}});
+  if(bad){notice={e:1,t:o8?"مجموع ساعات العمل لنفس العامل أكبر من 8 ساعات في اليوم.":"في صفوف ناقصة. راجع الخانات الحمراء."};render();marks.forEach(m=>{const el=document.querySelector(`[data-c="${m[0]}"][data-i="${m[1]}"][data-f="${m[2]}"]`);el&&el.classList.add("bad")});window.scrollTo(0,0);return;}
   if(!recs.length){notice={e:1,t:"مفيش بيانات للإرسال."};render();window.scrollTo(0,0);return;}
   notice=null;pending=recs;render();
 }
@@ -213,7 +250,7 @@ function confirmSend(){
   const log=ls.get("sent",{});
   const dup=[...new Set(pending.filter(r=>log[r.date+"|"+r.code]).map(r=>r.worker))];
   if(dup.length&&!confirm("اتبعتت يومية لنفس التاريخ قبل كده للعمال: "+dup.join("، ")+"\nتبعت تاني؟"))return;
-  const q=ls.get("queue",[]);q.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,8),records:pending});ls.set("queue",q);
+  const q=ls.get("queue",[]);q.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,8),records:pending,pass:dpass||undefined});ls.set("queue",q);
   pending.forEach(r=>log[r.date+"|"+r.code]=1);
   const ks=Object.keys(log);if(ks.length>600)ks.slice(0,ks.length-600).forEach(k=>delete log[k]);ls.set("sent",log);
   const it=ls.get("items",{}),cur=it[dept]||[];
@@ -223,19 +260,20 @@ function confirmSend(){
 }
 let flushing=false;
 async function flush(){
-  if(flushing)return;flushing=true;let sent=0;
+  if(flushing)return;flushing=true;let sent=0,rej="";
   try{
     const q=ls.get("queue",[]);
     while(q.length){
       try{
         const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify(q[0])});
         const t=(await r.text()).trim();
-        if(t==="ok"||t==="dup"){q.shift();sent++;ls.set("queue",q);}else break;
+        if(t==="ok"||t==="dup"){q.shift();sent++;ls.set("queue",q);}else if(t.startsWith("over:")||t==="date"){rej=t;restore(q.shift());ls.set("queue",q);}else break;
       }catch(e){break;}
     }
   }finally{flushing=false;}
   const left=ls.get("queue",[]).length;
-  if(left)notice={e:1,t:`⚠️ لم يتأكد وصول ${left} إرسال للشيت. البيانات محفوظة وسيُعاد الإرسال، أو اضغط "إعادة المحاولة".`};
+  if(rej)notice={e:1,t:rej==="date"?"⚠️ اتـرفض الإرسال: التاريخ غير مسموح. البيانات رجعت للشاشة.":"⚠️ اتـرفض الإرسال: ساعات ("+rej.slice(5)+") بتتجاوز 8 ساعات في اليوم مع إرساليات تانية. البيانات رجعت للشاشة، عدّلها وأعد الإرسال (أو عدّل القديمة من السجل)."};
+  else if(left)notice={e:1,t:`⚠️ لم يتأكد وصول ${left} إرسال للشيت. البيانات محفوظة وسيُعاد الإرسال، أو اضغط "إعادة المحاولة".`};
   else if(sent)notice={t:"✅ تم الإرسال وتأكد وصوله للشيت"};
   render();
 }
