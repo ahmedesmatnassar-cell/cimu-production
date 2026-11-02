@@ -47,7 +47,7 @@ let DEPTS = {
  "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
  "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
-const VER="2.6";
+const VER="2.7";
 const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -65,7 +65,7 @@ if(dept&&!DEPTS[dept])dept=null;
 async function loadCfg(){try{const r=await fetch(SCRIPT_URL+"?action=cfg");const c=await r.json();if(applyCfg(c)&&!pending){if(dept&&!DEPTS[dept]){dept=null;localStorage.removeItem("dept");}else if(dept)fill();render();}}catch(e){}}
 const blank = () => ({project:"",item:"",desc:"",h1:"",h2:"",ev:false});
 function resetRows(){ rows={}; locs={}; if(dept) DEPTS[dept].workers.forEach(w=>{rows[w[0]]=[blank()];locs[w[0]]="المصنع";}); }
-function fill(){ DEPTS[dept].workers.forEach(w=>{ if(!rows[w[0]]||!rows[w[0]].length)rows[w[0]]=[blank()]; if(!locs[w[0]])locs[w[0]]="المصنع"; }); }
+function fill(){ if(!dept||!DEPTS[dept])return; DEPTS[dept].workers.forEach(w=>{ if(!rows[w[0]]||!rows[w[0]].length)rows[w[0]]=[blank()]; if(!locs[w[0]])locs[w[0]]="المصنع"; }); }
 function saveDraft(){ if(dept) ls.set("draft",{dept,date,rows,locs}); }
 function loadDraft(){ const d=ls.get("draft",null); if(d&&d.dept===dept&&d.rows){rows=d.rows;locs=d.locs||{};date=d.date||today();fill();} }
 function setDate(v){date=v;saveDraft();}
@@ -76,13 +76,14 @@ function render(){
   if(!dept||!who){
     app.innerHTML=`<div class="card"><h1>يومية الإنتاج</h1><label>اسمك (اللي بيملا اليومية)</label><input id="who" value="${esc(who)}"><label>اختر قسمك</label>
       <select id="pick"><option value="">— اختر —</option>${Object.keys(DEPTS).map(d=>`<option ${d==dept?"selected":""}>${d}</option>`).join("")}</select>
-      <p><button class="pri" onclick="setDept()">متابعة</button></p></div>`;return;
+      <p><button class="pri" onclick="setDept()">متابعة</button></p></div>
+      <p style="text-align:center"><button class="sec" onclick="openAdmin()">⚙️ الإعدادات</button></p>${adm?admHtml():""}`;return;
   }
   const q=ls.get("queue",[]), items=(ls.get("items",{})[dept]||[]);
   app.innerHTML=`
    ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
    <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)} · v${VER}</div></div>
-     <div style="display:flex;gap:6px"><button class="sec" onclick="openAdmin()">⚙️</button><button class="sec" onclick="changeDept()">تغيير</button></div></div>
+     <button class="sec" onclick="changeDept()">تغيير</button></div>
      <label>التاريخ</label><div style="display:flex;gap:8px"><input type="date" value="${date}" onchange="setDate(this.value)" style="flex:1"><button class="sec" onclick="setDate(today());render()">اليوم</button></div>${date!==today()?`<div class="warn">⚠️ تاريخ اليومية ${date} مختلف عن تاريخ اليوم</div>`:""}
      <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
    <datalist id="items">${items.map(i=>`<option value="${esc(i)}">`).join("")}</datalist>
