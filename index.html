@@ -31,9 +31,11 @@ button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:10p
 .msg.e{background:#fbe5e2;color:#8a2218}
 .top{display:flex;justify-content:space-between;align-items:center}
 input.bad,select.bad{border-color:var(--err)}
+.clock{position:fixed;top:0;left:0;right:0;z-index:20;background:var(--pri);color:#fff;font-size:13px;padding:7px 12px;display:flex;justify-content:space-between}body{padding-top:46px}
 </style>
 </head>
 <body>
+<div class="clock"><span id="ck1"></span><b id="ck2" style="font-variant-numeric:tabular-nums"></b></div>
 <div id="app"></div>
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzIXXjU7VI_wqqy6CsGs82R72E6_0jvTBZIZifojV1m1vZhjZD_Zm_pj-oRVZP4rkxP/exec";
@@ -45,7 +47,7 @@ let DEPTS = {
  "الدهانات":{sup:"عماد جمعة",workers:[[763,"عماد جمعة حسين رمضان (مشرف)"],[722,"محمود محمد أحمد عبد المقصود"],[8012,"ناصر عويس شفيق محمد"],[8018,"مدبولي محمد مدبولي شافعي"]]},
  "التركيبات":{sup:"محمد بيومي",workers:[[759,"محمد بيومي سعد بيومي (مشرف)"],[817,"طارق سيد محمود موسى"],[818,"سلامه سلامه محمد عبد الجليل"],[887,"محمد عبد الرحمن احمد محمد الأسود"],[8022,"اسلام احمد محمد احمد"],[8024,"عبد الله محمد راشد علي منصور"],[8027,"ايمن عابدين حسن عبد اللاه"]]}
 };
-const VER="2.5";
+const VER="2.6";
 const LOCS=["المصنع","المشروع","أجازة"];
 const $ = s => document.querySelector(s);
 const ls = {get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
@@ -56,7 +58,7 @@ const rnd=()=>Math.random().toString(36).slice(2,8);
 let who=ls.get("who",""),devId=ls.get("dev","");
 if(!devId){devId="D"+rnd();ls.set("dev",devId);}
 const devInfo=(navigator.userAgent.match(/\(([^)]+)\)/)||["",""])[1].slice(0,80);
-let hist=null;
+let hist=null,adm=null;
 function applyCfg(c){if(c&&c.depts&&Object.keys(c.depts).length&&c.projects&&c.projects.length){DEPTS=c.depts;PROJECTS=c.projects;SUPS=new Set(c.sups||[]);ls.set("cfg",c);return true}return false}
 applyCfg(ls.get("cfg",null));
 if(dept&&!DEPTS[dept])dept=null;
@@ -80,14 +82,15 @@ function render(){
   app.innerHTML=`
    ${notice?`<div class="msg ${notice.e?"e":""}">${notice.t}</div>`:""}
    <div class="card"><div class="top"><div><h1>يومية إنتاج - ${dept}</h1><div class="badge">المشرف: أ/${DEPTS[dept].sup} · المُرسِل: ${esc(who)} · v${VER}</div></div>
-     <button class="sec" onclick="changeDept()">تغيير</button></div>
-     <label>التاريخ</label><input type="date" value="${date}" onchange="setDate(this.value)">
+     <div style="display:flex;gap:6px"><button class="sec" onclick="openAdmin()">⚙️</button><button class="sec" onclick="changeDept()">تغيير</button></div></div>
+     <label>التاريخ</label><div style="display:flex;gap:8px"><input type="date" value="${date}" onchange="setDate(this.value)" style="flex:1"><button class="sec" onclick="setDate(today());render()">اليوم</button></div>${date!==today()?`<div class="warn">⚠️ تاريخ اليومية ${date} مختلف عن تاريخ اليوم</div>`:""}
      <p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap">${ls.get("last",{})[dept]?`<button class="sec" onclick="copyLast()">📋 نسخ آخر يومية</button>`:""}<button class="sec" onclick="openHist()">📜 سجل آخر أسبوعين</button></p></div>
    <datalist id="items">${items.map(i=>`<option value="${esc(i)}">`).join("")}</datalist>
    ${DEPTS[dept].workers.map(cardHtml).join("")}
    <div class="bar"><span class="badge">${q.length?`⏳ ${q.length} لم يتأكد وصوله <button class="sec" onclick="flush()">إعادة المحاولة</button>`:""}</span><button class="pri" onclick="submitAll()">إرسال</button></div>
    ${pending?summaryHtml():""}
-   ${hist?histHtml():""}`;
+   ${hist?histHtml():""}
+   ${adm?admHtml():""}`;
   saveDraft();
 }
 function cardHtml(w){
@@ -103,13 +106,14 @@ function rowHtml(c,i,r){
    <label>المشروع</label><select ${k} data-f="project"><option value="">— اختر —</option>${PROJECTS.map(p=>`<option ${r.project==p?"selected":""}>${p}</option>`).join("")}</select>
    <label>البند</label><input ${k} data-f="item" list="items" autocomplete="off" value="${esc(r.item)}">
    <label>وصف العمل</label><input ${k} data-f="desc" value="${esc(r.desc)}">
-   <label>ساعات العمل</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h1)}">
+   <label>ساعات العمل</label><input ${k} data-f="h1" type="number" inputmode="decimal" min="0" max="8" step="0.5" value="${esc(r.h1)}">
    <div class="chk"><input type="checkbox" id="ev${c}_${i}" ${k} data-f="ev" ${r.ev?"checked":""}><label for="ev${c}_${i}">اشتغل سهرة</label></div>
    ${r.ev?`<label>ساعات السهرة</label><input ${k} data-f="h2" type="number" inputmode="decimal" min="0" max="24" step="0.5" value="${esc(r.h2)}">`:""}</div>`;
 }
 document.addEventListener("input",e=>{const t=e.target;if(!t.dataset)return;
   if(t.dataset.loc){locs[t.dataset.loc]=t.value;render();return;}
   if(t.dataset.f==="ev"){rows[t.dataset.c][t.dataset.i].ev=t.checked;render();return;}
+  if(t.dataset.f==="h1"&&t.value!==""){const n=Number(t.value);if(n>8)t.value="8";else if(n<0)t.value="0";}
   if(t.dataset.f){rows[t.dataset.c][t.dataset.i][t.dataset.f]=t.value;t.classList.remove("bad");saveDraft();}});
 function setDept(){const v=$("#pick").value,n=$("#who").value.trim();if(!v||!n){alert("اكتب اسمك واختر القسم");return;}who=n;ls.set("who",n);dept=v;ls.set("dept",v);resetRows();loadDraft();render();}
 function changeDept(){if(confirm("تغيير القسم؟")){dept=null;localStorage.removeItem("dept");render();}}
@@ -141,6 +145,40 @@ async function delBatch(i){const h=hist.list[i];if(!confirm("حذف هذا ال�
   try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"del",id:h.id})});if((await r.text()).trim()!=="ok")throw 0;
     const log=ls.get("sent",{});(h.codes||[]).forEach(c=>delete log[h.date+"|"+c]);ls.set("sent",log);}catch(e){alert("فشل الحذف");return;}
   openHist();}
+function tick(){const n=new Date(),L="ar-EG-u-nu-latn",a=$("#ck1"),b=$("#ck2");if(!a)return;
+  a.textContent=n.toLocaleDateString(L,{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+  b.textContent=n.toLocaleTimeString(L,{hour:"2-digit",minute:"2-digit",second:"2-digit"});}
+setInterval(tick,1000);tick();
+const cp=o=>JSON.parse(JSON.stringify(o));
+function openAdmin(){adm={st:"pass"};render();}
+async function admLogin(){const pw=$("#apw").value;if(!pw)return;
+  try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"auth",pass:pw})});const t=(await r.text()).trim();
+    if(t==="ok")adm={st:"edit",pw,c:cp({depts:DEPTS,projects:PROJECTS,sups:[...SUPS]})};
+    else adm={st:"pass",m:t==="unset"?"لم تُحدَّد كلمة مرور في Code.gs (ADMIN_PASS).":"كلمة المرور غلط"};}
+  catch(e){adm={st:"pass",m:"تعذر الاتصال"};}render();}
+function admHtml(){
+  if(adm.st==="pass")return `<div class="modal"><div class="box"><h2>⚙️ الإعدادات</h2><label>كلمة المرور</label><input type="password" id="apw" autocomplete="off">${adm.m?`<div class="warn">${adm.m}</div>`:""}<div class="g2" style="margin-top:12px"><button class="sec" onclick="adm=null;render()">إلغاء</button><button class="pri" onclick="admLogin()">دخول</button></div></div></div>`;
+  const c=adm.c, ds=Object.keys(c.depts);
+  return `<div class="modal"><div class="box tall"><div class="top"><h2>⚙️ الإعدادات</h2><button class="sec" onclick="adm=null;render()">إغلاق</button></div>
+  ${adm.m?`<div class="msg ${adm.e?"e":""}">${adm.m}</div>`:""}
+  ${ds.map(d=>`<div class="card"><h2>${esc(d)}</h2><label>اسم مشرف القسم</label><input value="${esc(c.depts[d].sup)}" onchange="adm.c.depts['${d}'].sup=this.value">
+   ${c.depts[d].workers.map((w,i)=>`<div class="row"><div class="g2"><input value="${esc(w[1])}" onchange="adm.c.depts['${d}'].workers[${i}][1]=this.value"><input value="${w[0]}" disabled></div><div class="chk"><input type="checkbox" ${c.sups.includes(w[0])?"checked":""} onchange="admSup(${w[0]},this.checked)"><label>مشرف</label><button class="del" onclick="admDel('${d}',${i})">حذف</button></div></div>`).join("")}</div>`).join("")}
+  <div class="card"><h2>➕ إضافة موظف</h2><label>القسم</label><select id="nd">${ds.map(d=>`<option>${esc(d)}</option>`).join("")}</select><label>الكود</label><input id="nc" inputmode="numeric"><label>الاسم الكامل</label><input id="nn"><div class="chk"><input type="checkbox" id="ns"><label for="ns">مشرف</label></div><p><button class="sec" onclick="admAdd()">إضافة</button></p></div>
+  <div class="card"><h2>المشاريع</h2>${c.projects.map((p,i)=>`<div class="srow"><span>${esc(p)}</span><button class="del" onclick="admDelP(${i})">حذف</button></div>`).join("")}<div class="g2" style="margin-top:8px"><input id="np" placeholder="مشروع جديد"><button class="sec" onclick="admAddP()">إضافة</button></div></div>
+  <div style="height:70px"></div><div class="bar"><button class="pri" onclick="admSave()">حفظ الإعدادات</button></div></div></div>`;
+}
+function admSup(c,on){const s=adm.c.sups,i=s.indexOf(c);if(on&&i<0)s.push(c);if(!on&&i>-1)s.splice(i,1);}
+function admDel(d,i){const w=adm.c.depts[d].workers[i];if(!confirm("حذف "+w[1]+"؟"))return;adm.c.depts[d].workers.splice(i,1);adm.c.sups=adm.c.sups.filter(x=>x!==w[0]);adm.m="تم الحذف (اضغط حفظ الإعدادات)";adm.e=0;render();}
+function admAdd(){const d=$("#nd").value,c=Number($("#nc").value),n=$("#nn").value.trim();
+  if(!c||!n){adm.m="اكتب الكود والاسم";adm.e=1;render();return;}
+  if(Object.values(adm.c.depts).some(x=>x.workers.some(w=>w[0]===c))){adm.m="الكود ده موجود قبل كده";adm.e=1;render();return;}
+  adm.c.depts[d].workers.push([c,n]);if($("#ns").checked)adm.c.sups.push(c);adm.m="تمت إضافة "+n+" (اضغط حفظ الإعدادات)";adm.e=0;render();}
+function admDelP(i){if(!confirm("حذف المشروع؟"))return;adm.c.projects.splice(i,1);adm.m="تم الحذف (اضغط حفظ الإعدادات)";adm.e=0;render();}
+function admAddP(){const p=$("#np").value.trim();if(!p)return;if(adm.c.projects.includes(p)){adm.m="المشروع موجود";adm.e=1;render();return;}adm.c.projects.push(p);adm.m="تمت الإضافة (اضغط حفظ الإعدادات)";adm.e=0;render();}
+async function admSave(){adm.m="جاري الحفظ...";adm.e=0;render();
+  try{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify({action:"cfg_save",pass:adm.pw,cfg:adm.c})});const t=(await r.text()).trim();
+    if(t==="ok"){applyCfg(cp(adm.c));fill();adm.m="✅ تم الحفظ. باقي الأجهزة بتتحدث عند فتح التطبيق.";}else{adm.m="فشل الحفظ: "+t;adm.e=1;}}
+  catch(e){adm.m="تعذر الاتصال";adm.e=1;}render();}
 function submitAll(){
   let bad=0; const recs=[], marks=[];
   DEPTS[dept].workers.forEach(w=>{
@@ -148,11 +186,11 @@ function submitAll(){
     if(locs[c]==="أجازة"){recs.push({...base,project:"",item:"",desc:"",h1:0,h2:0});return;}
     rows[c].forEach((r,i)=>{
       if(!(r.project||r.item||r.desc||r.h1||r.h2))return;
-      const ok=sup?!!r.project:(r.project&&r.item.trim()&&(r.ev?r.h2!=="":r.h1!==""));
+      const over=r.h1!==""&&Number(r.h1)>8;const ok=!over&&(sup?!!r.project:(r.project&&r.item.trim()&&(r.ev?r.h2!=="":r.h1!=="")));
       if(!ok){bad++;
         if(!r.project)marks.push([c,i,"project"]);
         if(!sup&&!r.item.trim())marks.push([c,i,"item"]);
-        if(!sup&&!r.ev&&r.h1==="")marks.push([c,i,"h1"]);
+        if(over||(!sup&&!r.ev&&r.h1===""))marks.push([c,i,"h1"]);
         if(!sup&&r.ev&&r.h2==="")marks.push([c,i,"h2"]);return;}
       recs.push({...base,project:r.project,item:r.item.trim(),desc:r.desc.trim(),h1:Number(r.h1||0),h2:r.ev?Number(r.h2||0):0});
     });

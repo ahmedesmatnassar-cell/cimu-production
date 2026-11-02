@@ -1,5 +1,7 @@
 // النسخة 2 - استبدل بها الكود القديم كله في Apps Script ثم: نشر > إدارة عمليات النشر > تعديل > إصدار جديد
 // ايميل التنبيهات: اكتب هنا أي ايميل (جوجل أو غيره). لأكتر من ايميل افصل بينهم بفاصلة. لو سبته فاضي هيروح لايميل حسابك.
+// كلمة مرور الإعدادات في التطبيق: اكتبها هنا (لازم تتحدد وإلا الإعدادات متقفلة)
+const ADMIN_PASS = "";
 const ALERT_EMAIL = "Ahmed.esmat@sectors-construction.com";
 const TAB = "يومية PWA", CFG = "القوائم", REP = "تقارير", IDCOL = 13;
 const HEAD = ["وقت الإرسال","التاريخ","القسم","المشرف","كود العامل","اسم العامل","المكان","المشروع","البند","وصف العمل","ساعات العمل","ساعات السهرة","معرّف الإرسال","المُرسِل","معرّف الجهاز","الجهاز"];
@@ -25,7 +27,10 @@ function tab_() {
 function doPost(e) {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
-    const b = JSON.parse(e.postData.contents), sh = tab_(), last = sh.getLastRow();
+    const b = JSON.parse(e.postData.contents);
+    if (b.action === "auth") return txt(!ADMIN_PASS ? "unset" : (b.pass === ADMIN_PASS ? "ok" : "no"));
+    if (b.action === "cfg_save") { if (!ADMIN_PASS || b.pass !== ADMIN_PASS) return txt("no"); saveCfg_(b.cfg); return txt("ok"); }
+    const sh = tab_(), last = sh.getLastRow();
     const ids = last > 1 ? sh.getRange(2, IDCOL, last - 1, 1).getValues().flat().map(String) : [];
     if (b.action === "del") {
       for (let i = ids.length - 1; i >= 0; i--) if (ids[i] === String(b.id)) sh.deleteRow(i + 2);
@@ -56,6 +61,13 @@ function cfgSheet_() {
     sh.setFrozenRows(1); sh.setRightToLeft(true);
   }
   return sh;
+}
+function saveCfg_(c) {
+  const sh = cfgSheet_(); sh.clearContents();
+  const rows = [["القسم","الكود","الاسم","مشرف؟ (نعم)","اسم مشرف القسم"]];
+  Object.keys(c.depts).forEach(d => c.depts[d].workers.forEach(w => rows.push([d, w[0], w[1], (c.sups || []).indexOf(w[0]) > -1 ? "نعم" : "", c.depts[d].sup || ""])));
+  sh.getRange(1, 1, rows.length, 5).setValues(rows);
+  sh.getRange(1, 7, c.projects.length + 1, 1).setValues([["المشاريع"]].concat(c.projects.map(p => [p])));
 }
 function cfg_() {
   const v = cfgSheet_().getDataRange().getValues().slice(1), depts = {}, sups = [], proj = [];
